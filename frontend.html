@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Wellness Monitor</title>
+  <style>
+    /* Global Styles */
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #333;
+    }
+    .container {
+      max-width: 900px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    }
+    label {
+      font-weight: 600;
+      margin-top: 12px;
+      display: block;
+    }
+    input[type=range] {
+      width: 100%;
+      margin-top: 8px;
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 8px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      resize: none;
+      font-size: 14px;
+    }
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .tags button {
+      border: 1px solid #4f46e5;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: #fff;
+      color: #4f46e5;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .tags button.active {
+      background: #4f46e5;
+      color: #fff;
+    }
+    .submit-btn {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px;
+      border: none;
+      border-radius: 12px;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .submit-btn:hover {
+      background: #4338ca;
+    }
+    .result, .recommendations {
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 12px;
+      background: #f9fafb;
+      border-left: 5px solid #4f46e5;
+    }
+    .chart-container {
+      margin-top: 20px;
+    }
+    canvas {
+      width: 100% !important;
+      max-height: 300px;
+    }
+    @media (max-width: 600px) {
+      .card {
+        padding: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌱 Student Wellness Monitor</h1>
+
+    <!-- Check-in Card -->
+    <div class="card">
+      <form id="checkinForm">
+        <label for="mood">Mood (1-5):</label>
+        <input type="range" id="mood" min="1" max="5" value="3">
+
+        <label for="textEntry">How are you feeling?</label>
+        <textarea id="textEntry" placeholder="Write something..."></textarea>
+
+        <label>Tags:</label>
+        <div class="tags" id="tags"></div>
+
+        <button type="submit" class="submit-btn">Submit Check-in</button>
+      </form>
+
+      <div id="result" class="result" style="display:none;"></div>
+      <div id="recommendations" class="recommendations" style="display:none;"></div>
+    </div>
+
+    <!-- Trend Visualization -->
+    <div class="card chart-container">
+      <h3>Mood Trend</h3>
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Tag options
+    const TAGS = ["sleep", "exam", "social", "study", "exercise", "family"];
+    const tagsDiv = document.getElementById("tags");
+    let selectedTags = [];
+    let history = [];
+
+    // Render tag buttons
+    TAGS.forEach(tag => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = tag;
+      btn.onclick = () => {
+        btn.classList.toggle("active");
+        if (selectedTags.includes(tag)) {
+          selectedTags = selectedTags.filter(t => t !== tag);
+        } else {
+          selectedTags.push(tag);
+        }
+      };
+      tagsDiv.appendChild(btn);
+    });
+
+    // Simple sentiment analysis
+    function analyzeSentiment(text) {
+      text = text.toLowerCase();
+      if (text.includes("happy") || text.includes("good") || text.includes("great")) return "positive";
+      if (text.includes("sad") || text.includes("stress") || text.includes("bad")) return "negative";
+      return "neutral";
+    }
+
+    // Recommendations
+    function getRecommendations(sentiment, mood) {
+      if (sentiment === "positive") {
+        return "🎉 Keep up the good energy! Share positivity with friends or enjoy a hobby.";
+      }
+      if (sentiment === "negative") {
+        return "💡 Try relaxation exercises, talk to someone you trust, or take a mindful break.";
+      }
+      if (mood <= 2) {
+        return "🧘 Your mood is low. Journaling, meditation, or light exercise may help.";
+      }
+      return "🌼 Stay balanced with proper rest, study breaks, and self-care.";
+    }
+
+    // Chart.js setup
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    const trendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Mood Trend',
+          data: [],
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79,70,229,0.2)',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { min: 1, max: 5 }
+        }
+      }
+    });
+
+    // Handle form submit
+    document.getElementById("checkinForm").onsubmit = (e) => {
+      e.preventDefault();
+      const mood = parseInt(document.getElementById("mood").value);
+      const text = document.getElementById("textEntry").value;
+      const sentiment = analyzeSentiment(text);
+      const rec = getRecommendations(sentiment, mood);
+
+      // Save data
+      history.push({ mood, sentiment, tags: [...selectedTags], time: new Date() });
+      trendChart.data.labels.push(new Date().toLocaleTimeString());
+      trendChart.data.datasets[0].data.push(mood);
+      trendChart.update();
+
+      // Show result
+      const resultDiv = document.getElementById("result");
+      resultDiv.style.display = "block";
+      resultDiv.innerHTML = `
+        <h3>Sentiment Result</h3>
+        <p><b>Label:</b> ${sentiment}</p>
+        <p><b>Mood Score:</b> ${mood}</p>
+        <p><b>Tags:</b> ${selectedTags.join(", ") || "—"}</p>
+      `;
+
+      // Show recommendations
+      const recDiv = document.getElementById("recommendations");
+      recDiv.style.display = "block";
+      recDiv.innerHTML = `
+        <h3>Personalized Recommendation</h3>
+        <p>${rec}</p>
+      `;
+
+      // Reset tags and text
+      selectedTags = [];
+      document.querySelectorAll(".tags button").forEach(btn => btn.classList.remove("active"));
+      document.getElementById("textEntry").value = "";
+    };
+  </script>
+</body>
+</html>
+ 
